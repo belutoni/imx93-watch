@@ -1,0 +1,1 @@
+savedcmd_drivers/lkss/lab5/hackpad.ko := aarch64-linux-gnu-ld -r -EL  -maarch64elf -z noexecstack --build-id=sha1  -T ./scripts/module.lds -o drivers/lkss/lab5/hackpad.ko drivers/lkss/lab5/hackpad.o drivers/lkss/lab5/hackpad.mod.o .module-common.o
