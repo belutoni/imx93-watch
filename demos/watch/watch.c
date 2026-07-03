@@ -93,12 +93,12 @@ static void clock_tick(lv_timer_t *t)
 	/* TODO 1: face switching.
 	 * SW2 -> show_face((cur_face + 1) % NUM_FACES)
 	 * SW1 -> show_face((cur_face + NUM_FACES - 1) % NUM_FACES)
-	*/
+	 */
 
 	/* TODO 5: watch tick.
 	 * Blink the blue LED once per second, e.g. on for even seconds:
 	 *   hal_led(HACKPAD_LED_BLUE, tm.tm_sec % 2 == 0);
-	*/
+	 */
 
 	/* TODO 2/3/4: update the current face (switch on cur_face).
 	 *
@@ -111,7 +111,7 @@ static void clock_tick(lv_timer_t *t)
 	 *         sensor values.
 	 *
 	 * Only the visible face needs updating - the others are hidden.
-	*/
+	 */
 }
 
 static lv_obj_t *make_face(void)

@@ -58,46 +58,12 @@ static lv_obj_t *cpu_bar, *mem_bar;
 /* Return the CPU usage in percent, or -1 on error */
 static int read_cpu_percent(void)
 {
-	static unsigned long long prev_total = 0, prev_idle = 0;
-	unsigned long long user, nice, system, idle, iowait, irq, softirq, steal;
-	unsigned long long total, idle_total, total_diff, idle_diff;
-	FILE *fp;
-	int ret;
-
-	fp = fopen("/proc/stat", "r");
-	if (!fp)
-		return -1;
-
-	ret = fscanf(fp, "cpu %llu %llu %llu %llu %llu %llu %llu %llu",
-		     &user, &nice, &system, &idle,
-		     &iowait, &irq, &softirq, &steal);
-	fclose(fp);
-
-	if (ret != 8)
-		return -1;
-
-	// spec: total = user+nice+system+idle+iowait+irq+softirq (fara steal) 
-	total = user + nice + system + idle + iowait + irq + softirq;
-
-	// in caz ca am ceva io operatii 
-	idle_total = idle + iowait;
-
-	if (prev_total == 0 && prev_idle == 0) {
-		prev_total = total;
-		prev_idle  = idle_total;
-		return 0;
-	}
-	
-	total_diff = total - prev_total;
-	idle_diff  = idle_total - prev_idle;
-
-	prev_total = total;
-	prev_idle  = idle_total;
-
-	if (total_diff == 0)
-		return 0;
-
-	return (int)(100 - (idle_diff * 100 / total_diff));
+	/* TODO 1: parse the first line of /proc/stat and compute the
+	 * usage from the delta with the previous call (see the header
+	 * comment for the formula). You need two static variables to
+	 * remember the previous total and idle counters.
+	 */
+	return -1;
 }
 
 /* Return the memory usage in percent (and MB through the pointers),
@@ -110,9 +76,42 @@ static int read_mem_percent(long *used_mb, long *total_mb)
 	 *   *total_mb = total / 1024;
 	 *   return (total - avail) * 100 / total;
 	 */
-	LV_UNUSED(used_mb);
-	LV_UNUSED(total_mb);
-	return -1;
+
+	/*
+	 *   /proc/meminfo (values in kB):
+	*     MemTotal:       2013840 kB
+	*     MemAvailable:   1704392 kB
+	*   used% = (MemTotal - MemAvailable) * 100 / MemTotal
+	*
+	* Parsing hints:
+	*   fscanf(f, "cpu %llu %llu %llu %llu %llu %llu %llu", ...)
+	*   fscanf(f, "%63s %ld kB\n", key, &val) in a loop + strcmp(key, ...)
+	*/
+	FILE *f = fopen("/proc/meminfo", "r");
+	if (!f) {
+		printf("Cannot open /proc/meminfo!\n");
+		return -1;
+	}
+
+	char key[64];
+	long int val; 
+	long int available = 0;
+	while (1) {
+		fscanf(f, "%63s, %ld kB\n", key, &val);
+		if (strcmp("MemAvailable:", key) == 0) {
+			available = val;
+			break;
+		} else if (strcmp("MemTotal:") == 0) {
+			*total_mb = val;
+		} else if (strcmp("MemFree:") == 0) {
+			continue;
+		}
+	}
+
+	*used_mb = (*total_mb - available) / 1024;
+	*total_mb = *total / 1024;
+
+	return (*total_mb - available) * 100 / *total_mb;
 }
 
 /* Every second: refresh all the readings */
@@ -158,6 +157,16 @@ static void update_tick(lv_timer_t *t)
 		 * hal_leds(): green below 30 %, blue below 70 %, red
 		 * above.
 		 */
+		 //  *   void hal_leds(uint32_t mask); bit0=red, bit1=green, bit2=blue
+		 int led;
+		 if (cpu < 30) {
+			led = 0b1;
+		 } else if (cpu < 70) {
+			 led = 0b100;
+		 } else {
+			led = 0b100;
+		 }
+		 hal_leds(led);
 	}
 
 	/* Memory */
@@ -165,7 +174,7 @@ static void update_tick(lv_timer_t *t)
 	int mem = read_mem_percent(&used_mb, &total_mb);
 
 	if (mem >= 0) {
-		lv_label_set_text_fmt(mem_lbl, "mem  %3d%%  %ld/%ldMB",
+		lv_label_set_text_fmt(mem_lbl, "mem  %1d%%  %ld/%ldMB",
 				      mem, used_mb, total_mb);
 		lv_bar_set_value(mem_bar, mem, LV_ANIM_OFF);
 	}
