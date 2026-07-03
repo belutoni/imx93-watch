@@ -55,18 +55,18 @@
 
 static lv_obj_t *uptime_lbl, *load_lbl, *cpu_lbl, *mem_lbl, *mem_usg_lbl, *cursor_lbl;
 
-#define ANOMALY_JUMP 25
+#define SPIKE_JUMP 25
 
-enum { SCR_HOME, SCR_ANOMALIES, NUM_SCREENS };
+enum { SCR_HOME, SCR_SPIKES, NUM_SCREENS };
 
 static lv_obj_t *screens[NUM_SCREENS];
 
 
 static lv_obj_t *cpu_bar, *mem_bar;
-static lv_obj_t *anomaly_lbl;
+static lv_obj_t *spike_lbl;
 
 static double cpu_baseline = -1, mem_baseline = -1;
-static int cpu_anomaly_count, mem_anomaly_count;
+static int cpu_spike_count, mem_spike_count;
 
 static void show_screen(int idx)
 {
@@ -84,10 +84,10 @@ static void nav_tick(lv_timer_t *t)
 	if (hal_button_pressed(HACKPAD_BTN_SW1))
 		show_screen(SCR_HOME);
 	if (hal_button_pressed(HACKPAD_BTN_SW4))
-		show_screen(SCR_ANOMALIES);
+		show_screen(SCR_SPIKES);
 }
 
-static void check_anomaly(int value, double *baseline, int *count)
+static void check_spike(int value, double *baseline, int *count)
 {
 	if (value < 0)
 		return;
@@ -97,7 +97,7 @@ static void check_anomaly(int value, double *baseline, int *count)
 		return;
 	}
 
-	if (value - *baseline >= ANOMALY_JUMP) {
+	if (value - *baseline >= SPIKE_JUMP) {
 		(*count)++;
 		*baseline = value;
 	} else {
@@ -108,10 +108,6 @@ static void check_anomaly(int value, double *baseline, int *count)
 /* Return the CPU usage in percent, or -1 on error */
 static int read_cpu_percent(void)
 {
-<<<<<<< HEAD
-=======
-
->>>>>>> 77826b6 (anomaly detection on cpu %)
 	static unsigned long long prev_total = 0, prev_idle = 0;
 	unsigned long long user, nice, system, idle, iowait, irq, softirq, steal;
 	unsigned long long total, idle_total, total_diff, idle_diff;
@@ -152,17 +148,6 @@ static int read_cpu_percent(void)
 		return 0;
 
 	return (int)(100 - (idle_diff * 100 / total_diff));
-<<<<<<< HEAD
-	/* TODO 1: parse the first line of /proc/stat and compute the
-	 * usage from the delta with the previous call (see the header
-	 * comment for the formula). You need two static variables to
-	 * remember the previous total and idle counters.
-	 */
-
-	
-=======
->>>>>>> 77826b6 (anomaly detection on cpu %)
-	return -1;
 }
 
 /* Return the memory usage in percent (and MB through the pointers),
@@ -171,29 +156,6 @@ static int read_mem_percent(long *used_mb, long *total_mb)
 {
 	FILE *fp;
 	char key[64];
-<<<<<<< HEAD
-	char junk[128];
-	long int val; 
-	long int available = 0, total = 0;
-	while (1) {
-		fscanf(f, "%s %ld %s", key, &val, junk);
-		if (strcmp("MemAvailable:", key) == 0) {
-			available = val;
-			break;
-		} else if (strcmp("MemTotal:", key) == 0) {
-			total = val;
-		} else if (strcmp("MemFree:", key) == 0) {
-			continue;
-		}
-		
-	}
-	fclose(f);
-
-	*used_mb = (total - available) / 1024;
-	*total_mb = total / 1024;
-
-	return (total - available) * 100 / total;
-=======
 	long val;
 	long total = -1, avail = -1;
 
@@ -207,7 +169,7 @@ static int read_mem_percent(long *used_mb, long *total_mb)
 		else if (strcmp(key, "MemAvailable:") == 0)
 			avail = val;
 
-			if (total >= 0 && avail >= 0)
+		if (total >= 0 && avail >= 0)
 			break;
 	}
 	fclose(fp);
@@ -219,7 +181,6 @@ static int read_mem_percent(long *used_mb, long *total_mb)
 	*total_mb = total / 1024;
 
 	return (int)((total - avail) * 100 / total);
->>>>>>> 77826b6 (anomaly detection on cpu %)
 }
 
 
@@ -277,7 +238,7 @@ static void update_tick(lv_timer_t *t)
 		 }
 		 hal_leds(led);
 
-		check_anomaly(cpu, &cpu_baseline, &cpu_anomaly_count);
+		check_spike(cpu, &cpu_baseline, &cpu_spike_count);
 	}
 
 
@@ -288,15 +249,15 @@ static void update_tick(lv_timer_t *t)
 	if (mem >= 0) {
 		lv_label_set_text_fmt(mem_lbl, "mem %3d%%",
 				      mem);
-		lv_label_set_text_fmt(mem_usg_lbl, "usg %ld/%ldMB",
+		lv_label_set_text_fmt(mem_usg_lbl, "usg%ld/%ldMB",
 					used_mb, total_mb);
 		lv_bar_set_value(mem_bar, mem, LV_ANIM_OFF);
 
-		check_anomaly(mem, &mem_baseline, &mem_anomaly_count);
+		check_spike(mem, &mem_baseline, &mem_spike_count);
 	}
 
-	lv_label_set_text_fmt(anomaly_lbl, "ANOMALIES:\nCPU  %d\nMEM  %d",
-			       cpu_anomaly_count, mem_anomaly_count);
+	lv_label_set_text_fmt(spike_lbl, "SPIKES:\nCPU  %d\nMEM  %d",
+			       cpu_spike_count, mem_spike_count);
 }
 /* Blinking terminal cursor for the retro feel */
 static void cursor_tick(lv_timer_t *t)
@@ -314,7 +275,7 @@ static lv_obj_t *make_line(lv_obj_t *parent, int y, const lv_font_t *font)
 
 	lv_obj_set_style_text_color(l, lv_color_hex(GREEN), 0);
 	lv_obj_set_style_text_font(l, font, 0);
-	lv_obj_set_pos(l, 8, y);
+	lv_obj_set_pos(l, 4, y);
 	lv_label_set_text(l, "");
 	return l;
 }
@@ -324,7 +285,7 @@ static lv_obj_t *make_bar(lv_obj_t *parent, int y)
 	lv_obj_t *b = lv_bar_create(parent);
 
 	lv_obj_set_size(b, 224, 10);
-	lv_obj_set_pos(b, 8, y);
+	lv_obj_set_pos(b, 4, y);
 	lv_bar_set_range(b, 0, 100);
 	lv_obj_set_style_bg_color(b, lv_color_hex(DARK), LV_PART_MAIN);
 	lv_obj_set_style_bg_color(b, lv_color_hex(GREEN), LV_PART_INDICATOR);
@@ -352,49 +313,39 @@ int main(void)
 	lv_obj_remove_flag(home, LV_OBJ_FLAG_SCROLLABLE);
 	screens[SCR_HOME] = home;
 
-	lv_obj_t *anomalies = lv_obj_create(scr);
-	lv_obj_set_size(anomalies, 240, 240);
-	lv_obj_set_pos(anomalies, 0, 0);
-	lv_obj_set_style_bg_color(anomalies, lv_color_black(), 0);
-	lv_obj_set_style_border_width(anomalies, 0, 0);
-	lv_obj_set_style_radius(anomalies, 0, 0);
-	lv_obj_remove_flag(anomalies, LV_OBJ_FLAG_SCROLLABLE);
-	screens[SCR_ANOMALIES] = anomalies;
+	lv_obj_t *spikes = lv_obj_create(scr);
+	lv_obj_set_size(spikes, 240, 240);
+	lv_obj_set_pos(spikes, 0, 0);
+	lv_obj_set_style_bg_color(spikes, lv_color_black(), 0);
+	lv_obj_set_style_border_width(spikes, 0, 0);
+	lv_obj_set_style_radius(spikes, 0, 0);
+	lv_obj_remove_flag(spikes, LV_OBJ_FLAG_SCROLLABLE);
+	screens[SCR_SPIKES] = spikes;
 
 	/* Header: hostname + kernel release */
 	uname(&un);
-	lv_obj_t *hdr = make_line(home, 8, &lv_font_unscii_16);
+	lv_obj_t *hdr = make_line(home, 2, &lv_font_unscii_16);
 	lv_label_set_text_fmt(hdr, "%s@lkss", un.nodename);
 
-	lv_obj_t *krn = make_line(home, 30, &lv_font_unscii_8);
+	lv_obj_t *krn = make_line(home, 24, &lv_font_unscii_8);
 	lv_label_set_text_fmt(krn, "linux %s %s", un.release, un.machine);
 
-	lv_obj_t *sep = make_line(home, 46, &lv_font_unscii_8);
+	lv_obj_t *sep = make_line(home, 40, &lv_font_unscii_8);
 	lv_label_set_text(sep, "------------------------------");
 
-<<<<<<< HEAD
-	uptime_lbl = make_line(scr,  62, &lv_font_unscii_16);
-	load_lbl   = make_line(scr,  86, &lv_font_unscii_8);
-	cpu_lbl    = make_line(scr, 102, &lv_font_unscii_16);
-	cpu_bar    = make_bar(scr, 124);
-	mem_lbl    = make_line(scr, 144, &lv_font_unscii_16);
-	mem_bar    = make_bar(scr, 168);
-	mem_usg_lbl= make_line(scr, 188, &lv_font_unscii_16);
-	cursor_lbl = make_line(scr, 210, &lv_font_unscii_16);
-=======
-	uptime_lbl = make_line(home,  62, &lv_font_unscii_16);
-	load_lbl   = make_line(home,  86, &lv_font_unscii_16);
-	cpu_lbl    = make_line(home, 118, &lv_font_unscii_16);
-	cpu_bar    = make_bar(home, 140);
-	mem_lbl    = make_line(home, 160, &lv_font_unscii_16);
-	mem_bar    = make_bar(home, 182);
-	cursor_lbl = make_line(home, 204, &lv_font_unscii_16);
->>>>>>> 77826b6 (anomaly detection on cpu %)
+	uptime_lbl  = make_line(home,  56, &lv_font_unscii_16);
+	load_lbl    = make_line(home,  80, &lv_font_unscii_16);
+	cpu_lbl     = make_line(home, 102, &lv_font_unscii_16);
+	cpu_bar     = make_bar(home, 124);
+	mem_lbl     = make_line(home, 142, &lv_font_unscii_16);
+	mem_bar     = make_bar(home, 164);
+	mem_usg_lbl = make_line(home, 182, &lv_font_unscii_16);
+	cursor_lbl  = make_line(home, 204, &lv_font_unscii_16);
 
 	lv_label_set_text(cpu_lbl, "cpu WAIT");
 	lv_label_set_text(mem_lbl, "mem WAIT");
 
-	anomaly_lbl = make_line(anomalies, 8, &lv_font_unscii_16);
+	spike_lbl = make_line(spikes, 2, &lv_font_unscii_16);
 
 	show_screen(SCR_HOME);
 
