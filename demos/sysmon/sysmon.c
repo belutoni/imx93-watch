@@ -55,14 +55,49 @@ static lv_obj_t *uptime_lbl, *load_lbl, *cpu_lbl, *mem_lbl, *cursor_lbl;
 static lv_obj_t *cpu_bar, *mem_bar;
 
 /* Return the CPU usage in percent, or -1 on error */
+/* Return the CPU usage in percent, or -1 on error */
 static int read_cpu_percent(void)
 {
-	/* TODO 1: parse the first line of /proc/stat and compute the
-	 * usage from the delta with the previous call (see the header
-	 * comment for the formula). You need two static variables to
-	 * remember the previous total and idle counters.
-	 */
-	return -1;
+	static unsigned long long prev_total = 0, prev_idle = 0;
+	unsigned long long user, nice, system, idle, iowait, irq, softirq, steal;
+	unsigned long long total, idle_total, total_diff, idle_diff;
+	FILE *fp;
+	int ret;
+
+	fp = fopen("/proc/stat", "r");
+	if (!fp)
+		return -1;
+
+	ret = fscanf(fp, "cpu %llu %llu %llu %llu %llu %llu %llu %llu",
+		     &user, &nice, &system, &idle,
+		     &iowait, &irq, &softirq, &steal);
+	fclose(fp);
+
+	if (ret != 8)
+		return -1;
+
+	// spec: total = user+nice+system+idle+iowait+irq+softirq (fara steal) 
+	total = user + nice + system + idle + iowait + irq + softirq;
+
+	// in caz ca am ceva io operatii 
+	idle_total = idle + iowait;
+
+	if (prev_total == 0 && prev_idle == 0) {
+		prev_total = total;
+		prev_idle  = idle_total;
+		return 0;
+	}
+	
+	total_diff = total - prev_total;
+	idle_diff  = idle_total - prev_idle;
+
+	prev_total = total;
+	prev_idle  = idle_total;
+
+	if (total_diff == 0)
+		return 0;
+
+	return (int)(100 - (idle_diff * 100 / total_diff));
 }
 
 /* Return the memory usage in percent (and MB through the pointers),
