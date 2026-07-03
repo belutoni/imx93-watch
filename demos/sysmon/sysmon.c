@@ -51,14 +51,12 @@
 #define GREEN 0x33FF66
 #define DARK  0x0A2A12
 
-static lv_obj_t *uptime_lbl, *load_lbl, *cpu_lbl, *mem_lbl, *cursor_lbl;
+static lv_obj_t *uptime_lbl, *load_lbl, *cpu_lbl, *mem_lbl, *mem_usg_lbl, *cursor_lbl;
 static lv_obj_t *cpu_bar, *mem_bar;
 
 /* Return the CPU usage in percent, or -1 on error */
-/* Return the CPU usage in percent, or -1 on error */
 static int read_cpu_percent(void)
 {
-<<<<<<< HEAD
 	static unsigned long long prev_total = 0, prev_idle = 0;
 	unsigned long long user, nice, system, idle, iowait, irq, softirq, steal;
 	unsigned long long total, idle_total, total_diff, idle_diff;
@@ -99,7 +97,6 @@ static int read_cpu_percent(void)
 		return 0;
 
 	return (int)(100 - (idle_diff * 100 / total_diff));
-=======
 	/* TODO 1: parse the first line of /proc/stat and compute the
 	 * usage from the delta with the previous call (see the header
 	 * comment for the formula). You need two static variables to
@@ -108,7 +105,6 @@ static int read_cpu_percent(void)
 
 	
 	return -1;
->>>>>>> e611dd6 (leds and memory)
 }
 
 /* Return the memory usage in percent (and MB through the pointers),
@@ -139,24 +135,27 @@ static int read_mem_percent(long *used_mb, long *total_mb)
 	}
 
 	char key[64];
+	char junk[128];
 	long int val; 
-	long int available = 0;
+	long int available = 0, total = 0;
 	while (1) {
-		fscanf(f, "%63s, %ld kB\n", key, &val);
+		fscanf(f, "%s %ld %s", key, &val, junk);
 		if (strcmp("MemAvailable:", key) == 0) {
 			available = val;
 			break;
-		} else if (strcmp("MemTotal:") == 0) {
-			*total_mb = val;
-		} else if (strcmp("MemFree:") == 0) {
+		} else if (strcmp("MemTotal:", key) == 0) {
+			total = val;
+		} else if (strcmp("MemFree:", key) == 0) {
 			continue;
 		}
+		
 	}
+	fclose(f);
 
-	*used_mb = (*total_mb - available) / 1024;
-	*total_mb = *total / 1024;
+	*used_mb = (total - available) / 1024;
+	*total_mb = total / 1024;
 
-	return (*total_mb - available) * 100 / *total_mb;
+	return (total - available) * 100 / total;
 }
 
 /* Every second: refresh all the readings */
@@ -195,7 +194,7 @@ static void update_tick(lv_timer_t *t)
 	int cpu = read_cpu_percent();
 
 	if (cpu >= 0) {
-		lv_label_set_text_fmt(cpu_lbl, "cpu  %3d%%", cpu);
+		lv_label_set_text_fmt(cpu_lbl, "cpu %3d%%", cpu);
 		lv_bar_set_value(cpu_bar, cpu, LV_ANIM_OFF);
 
 		/* TODO 3: CPU load LED.
@@ -205,11 +204,11 @@ static void update_tick(lv_timer_t *t)
 		 //  *   void hal_leds(uint32_t mask); bit0=red, bit1=green, bit2=blue
 		 int led;
 		 if (cpu < 30) {
-			led = 0b1;
+			led = 0b10;
 		 } else if (cpu < 70) {
 			 led = 0b100;
 		 } else {
-			led = 0b100;
+			led = 0b1;
 		 }
 		 hal_leds(led);
 	}
@@ -219,8 +218,10 @@ static void update_tick(lv_timer_t *t)
 	int mem = read_mem_percent(&used_mb, &total_mb);
 
 	if (mem >= 0) {
-		lv_label_set_text_fmt(mem_lbl, "mem  %1d%%  %ld/%ldMB",
-				      mem, used_mb, total_mb);
+		lv_label_set_text_fmt(mem_lbl, "mem %3d%%",
+				      mem);
+		lv_label_set_text_fmt(mem_usg_lbl, "usg %ld/%ldMB",
+					used_mb, total_mb);
 		lv_bar_set_value(mem_bar, mem, LV_ANIM_OFF);
 	}
 }
@@ -282,15 +283,16 @@ int main(void)
 	lv_label_set_text(sep, "------------------------------");
 
 	uptime_lbl = make_line(scr,  62, &lv_font_unscii_16);
-	load_lbl   = make_line(scr,  86, &lv_font_unscii_16);
-	cpu_lbl    = make_line(scr, 118, &lv_font_unscii_16);
-	cpu_bar    = make_bar(scr, 140);
-	mem_lbl    = make_line(scr, 160, &lv_font_unscii_16);
-	mem_bar    = make_bar(scr, 182);
-	cursor_lbl = make_line(scr, 204, &lv_font_unscii_16);
+	load_lbl   = make_line(scr,  86, &lv_font_unscii_8);
+	cpu_lbl    = make_line(scr, 102, &lv_font_unscii_16);
+	cpu_bar    = make_bar(scr, 124);
+	mem_lbl    = make_line(scr, 144, &lv_font_unscii_16);
+	mem_bar    = make_bar(scr, 168);
+	mem_usg_lbl= make_line(scr, 188, &lv_font_unscii_16);
+	cursor_lbl = make_line(scr, 210, &lv_font_unscii_16);
 
-	lv_label_set_text(cpu_lbl, "cpu  TODO");
-	lv_label_set_text(mem_lbl, "mem  TODO");
+	lv_label_set_text(cpu_lbl, "cpu WAIT");
+	lv_label_set_text(mem_lbl, "mem WAIT");
 
 	update_tick(NULL);
 	lv_timer_create(update_tick, 1000, NULL);
