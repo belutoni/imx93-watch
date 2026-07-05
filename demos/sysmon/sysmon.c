@@ -57,13 +57,15 @@ static lv_obj_t *uptime_lbl, *load_lbl, *cpu_lbl, *mem_lbl, *mem_usg_lbl, *curso
 
 #define SPIKE_JUMP 25
 
-enum { SCR_HOME, SCR_SPIKES, NUM_SCREENS };
+enum { SCR_HOME, SCR_SPIKES, SCR_CPU_GRAPH, NUM_SCREENS };
 
 static lv_obj_t *screens[NUM_SCREENS];
 
 
 static lv_obj_t *cpu_bar, *mem_bar;
 static lv_obj_t *spike_lbl;
+static lv_obj_t *cpu_chart;
+static lv_chart_series_t *cpu_series;
 
 static double cpu_baseline = -1, mem_baseline = -1;
 static int cpu_spike_count, mem_spike_count;
@@ -83,6 +85,8 @@ static void nav_tick(lv_timer_t *t)
 	LV_UNUSED(t);
 	if (hal_button_pressed(HACKPAD_BTN_SW1))
 		show_screen(SCR_HOME);
+	if (hal_button_pressed(HACKPAD_BTN_SW2))
+		show_screen(SCR_CPU_GRAPH);
 	if (hal_button_pressed(HACKPAD_BTN_SW4))
 		show_screen(SCR_SPIKES);
 }
@@ -238,6 +242,8 @@ static void update_tick(lv_timer_t *t)
 		 }
 		 hal_leds(led);
 
+		lv_chart_set_next_value(cpu_chart, cpu_series, cpu);
+
 		check_spike(cpu, &cpu_baseline, &cpu_spike_count);
 	}
 
@@ -322,6 +328,15 @@ int main(void)
 	lv_obj_remove_flag(spikes, LV_OBJ_FLAG_SCROLLABLE);
 	screens[SCR_SPIKES] = spikes;
 
+	lv_obj_t *cpu_scr = lv_obj_create(scr);
+	lv_obj_set_size(cpu_scr, 240, 240);
+	lv_obj_set_pos(cpu_scr, 0, 0);
+	lv_obj_set_style_bg_color(cpu_scr, lv_color_black(), 0);
+	lv_obj_set_style_border_width(cpu_scr, 0, 0);
+	lv_obj_set_style_radius(cpu_scr, 0, 0);
+	lv_obj_remove_flag(cpu_scr, LV_OBJ_FLAG_SCROLLABLE);
+	screens[SCR_CPU_GRAPH] = cpu_scr;
+
 	/* Header: hostname + kernel release */
 	uname(&un);
 	lv_obj_t *hdr = make_line(home, 2, &lv_font_unscii_16);
@@ -346,6 +361,21 @@ int main(void)
 	lv_label_set_text(mem_lbl, "mem WAIT");
 
 	spike_lbl = make_line(spikes, 2, &lv_font_unscii_16);
+
+	lv_obj_t *cpu_title = make_line(cpu_scr, 2, &lv_font_unscii_16);
+	lv_label_set_text(cpu_title, "CPU %");
+
+	cpu_chart = lv_chart_create(cpu_scr);
+	lv_obj_set_size(cpu_chart, 224, 190);
+	lv_obj_set_pos(cpu_chart, 4, 26);
+	lv_chart_set_type(cpu_chart, LV_CHART_TYPE_LINE);
+	lv_chart_set_point_count(cpu_chart, 60);
+	lv_chart_set_axis_range(cpu_chart, LV_CHART_AXIS_PRIMARY_Y, 0, 100);
+	lv_chart_set_div_line_count(cpu_chart, 4, 0);
+	lv_obj_set_style_bg_color(cpu_chart, lv_color_hex(DARK), LV_PART_MAIN);
+	lv_obj_set_style_border_width(cpu_chart, 0, 0);
+	cpu_series = lv_chart_add_series(cpu_chart, lv_color_hex(GREEN),
+					  LV_CHART_AXIS_PRIMARY_Y);
 
 	show_screen(SCR_HOME);
 
